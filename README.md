@@ -1,2 +1,4 @@
-# person-anonymization
-Person anonymization for real-time surveillance cameras
+# Person Anonymization
+
+
+Person anonymization for real-time surveillance cameras using computer vision
