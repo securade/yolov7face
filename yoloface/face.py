@@ -140,8 +140,7 @@ class YOLOv7Configs:
 
 class YOLOv7Face:
     def __init__(self, configs: YOLOv7Configs, anonymizer: Optional[FaceAnonymizer] = None,
-                 display_num_faces: bool = True,
-                 verbose: bool = False):
+                 display_num_faces: bool = True, verbose: bool = False):
         """Initializes an instance of the class to use YOLOv7 model for face detection and/or anonymization.
 
         Args:
@@ -149,7 +148,7 @@ class YOLOv7Face:
             anonymizer (Optional[FaceAnonymizer]): An optional FaceAnonymizer if willing to apply face anonymizer.
                                                    Defaults to None.
             display_num_faces (bool): Whether to display the number of detected faces in the image. Defaults to True.
-            verbose (bool): Verbose level. Defaults to False.
+            verbose (bool): Verbosity level. Defaults to False.
 
         Returns:
             self: The instance itself.
@@ -161,7 +160,7 @@ class YOLOv7Face:
 
         if self.anonymizer.bbox_type != 'xyxy':
             self.anonymizer.bbox_type = 'xyxy'
-            warnings.warn("anonymizer.bbox_type must be set to 'xyxy'. It was automatically changed.")
+            warnings.warn("anonymizer.bbox_type must be 'xyxy'. It was automatically changed to 'xyxy'")
 
     def predict_img(self, img: Union[str, Image.Image, np.ndarray], view_img: bool = True,
                     save_to: Optional[str] = None):
@@ -258,7 +257,6 @@ class YOLOv7Face:
         Args:
             video_path (str): Path to the input video for face detection and/or anonymization.
             save_to (str): Path to save the output video.
-
         """
         video = cv2.VideoCapture(video_path)
 
