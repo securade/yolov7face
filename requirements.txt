@@ -1,4 +1,2 @@
 -r yolov7/requirements.txt
-google-colab==1.0.0
-requests>=2.23.0
-ipython==8.6.0
+onnx>=1.9.0
