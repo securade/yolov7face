@@ -1,9 +1,11 @@
+import os
 from typing import Union, Optional
 from typing_extensions import TypedDict
 import warnings
 
 import cv2
 from google.colab.patches import cv2_imshow
+from IPython.display import HTML, display, Javascript, Image
 import numpy as np
 from numpy import random
 from PIL import Image
@@ -44,9 +46,12 @@ class YOLOv7Configs:
         Returns:
             self: The instance itself.
         """
+        with open(cfg, "r") as f:
+            cfg_dict = yaml.safe_load(f)
+
         self.__params = dict(
             weights=weights,
-            cfg=cfg,
+            cfg=cfg_dict,
             img_size=img_size,
             conf_thres=conf_thres,
             iou_thres=iou_thres,
@@ -66,15 +71,20 @@ class YOLOv7Configs:
         self.__params['weights'] = value
 
     @property
-    def cfg(self) -> str:
-        """Path to the YOLOv7 YAML config file used in training.
+    def cfg(self) -> dict:
+        """YOLOv7 configs used in training.
 
         """
         return self.__params.get('cfg')
 
     @cfg.setter
-    def cfg(self, value: str):
-        self.__params['cfg'] = value
+    def cfg(self, value: Union[dict, str]):
+        cfg_dict = value
+        if isinstance(value, str):
+            with open(value, "r") as f:
+                cfg_dict = yaml.safe_load(f)
+
+        self.__params['cfg'] = cfg_dict
 
     @property
     def img_size(self) -> int:
@@ -133,7 +143,7 @@ class YOLOv7Configs:
 
     def __repr__(self) -> str:
         return (
-            f"<YOLOv7Configs(weights='{self.weights}', cfg='{self.cfg}', img_size={self.img_size}, "
+            f"<YOLOv7Configs(weights='{os.path.basename(self.weights)}', img_size={self.img_size}, "
             f"conf_thres={self.conf_thres}, iou_thres={self.iou_thres}, device='{self.device}')>"
         )
 
@@ -158,16 +168,17 @@ class YOLOv7Face:
         self.display_num_faces: bool = display_num_faces
         self.verbose = verbose
 
-        if self.anonymizer.bbox_type != 'xyxy':
+        if self.anonymizer and self.anonymizer.bbox_type != 'xyxy':
             self.anonymizer.bbox_type = 'xyxy'
             warnings.warn("anonymizer.bbox_type must be 'xyxy'. It was automatically changed to 'xyxy'")
 
-    def predict_img(self, img: Union[str, Image.Image, np.ndarray], view_img: bool = True,
-                    save_to: Optional[str] = None):
+    def predict_img(self, img: Union[str, Image.Image, np.ndarray], bboxes: Optional[List[list]] = None,
+                    view_img: bool = True, save_to: Optional[str] = None):
         """Performs face detection (and anonymization if self.anonymizer is provided) on the input image.
 
         Args:
             img (Union[str, Image.Image, np.ndarray]): Input image for face detection and/or anonymization.
+            bboxes (Optional[List[list]]): Optional bounding boxes to display on the image. Defaults to None.
             view_img (bool): Whether to display the output image. Defaults to True.
             save_to (Optional[str]): If provided, the output image will be saved to this path. Defaults to None.
 
@@ -225,6 +236,8 @@ class YOLOv7Face:
                                        agnostic=False)
 
             t2 = time_synchronized()
+
+            n_faces = 0
             for i, det in enumerate(pred):
                 s = ''
                 s += '%gx%g ' % img.shape[2:]  # Print string
@@ -242,6 +255,17 @@ class YOLOv7Face:
                         else:
                             label = f'{names[int(cls)]} {conf:.2f}'
                             plot_one_box(xyxy, img0, label=label, color=colors[int(cls)], line_thickness=3)
+
+                    n_faces = (det[:, -1] == c).sum()
+
+            if self.display_num_faces:
+                img0 = cv2.putText(img0, text=f"{n_faces or 'no'} face{'s' * (n_faces == 0 or n_faces > 1)}",
+                                   org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.3, color=(255, 0, 0),
+                                   thickness=2, lineType=cv2.LINE_AA)
+
+            if bboxes:
+                for bbox in bboxes:
+                    plot_one_box(bbox, img0, label="ground truth", line_thickness=2)
 
         if save_to:
             Image.fromarray(img0).save(save_to)
@@ -315,6 +339,8 @@ class YOLOv7Face:
                     pred = non_max_suppression(pred, self.configs.conf_thres, self.configs.iou_thres, classes=classes,
                                                agnostic=False)
                     t2 = time_synchronized()
+
+                    n_faces = 0
                     for i, det in enumerate(pred):
                         s = ''
                         s += '%gx%g ' % img.shape[2:]  # print string
@@ -333,6 +359,14 @@ class YOLOv7Face:
                                     label = f'{names[int(cls)]} {conf:.2f}'
                                     plot_one_box(xyxy, img0, label=label, color=colors[int(cls)], line_thickness=3)
 
+                            n_faces = (det[:, -1] == c).sum()
+
+                    if self.display_num_faces:
+                        img0 = cv2.putText(img0, text=f"{n_faces or 'no'} face{'s' * (n_faces == 0 or n_faces > 1)}",
+                                           org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.3,
+                                           color=(255, 0, 0),
+                                           thickness=2, lineType=cv2.LINE_AA)
+
                     if self.verbose:
                         print(f"{j + 1}/{nframes} frames processed")
 
@@ -342,3 +376,154 @@ class YOLOv7Face:
 
         output.release()
         video.release()
+
+    @staticmethod
+    def js_to_image(js_object) -> np.ndarray:
+        """Converts a given JavaScript object into an OpenCV image.
+
+        Args:
+            js_object: JavaScript object.
+
+        Returns:
+            np.ndarray: OpenCV BGR image.
+        """
+        # Decode base64 image
+        image_bytes = b64decode(js_object.split(',')[1])
+
+        # Convert bytes to numpy array
+        jpg_as_np = np.frombuffer(image_bytes, dtype=np.uint8)
+
+        # Cecode numpy array into OpenCV BGR image
+        img = cv2.imdecode(jpg_as_np, flags=1)
+
+        return img
+
+    @staticmethod
+    def bbox_to_bytes(bbox_array) -> bytes:
+        """Converts OpenCV Rectangle bounding box image into base64 byte string to be overlayed on video stream.
+
+        Args:
+            bbox_array: Numpy array (pixels) containing rectangle to overlay on video stream.
+
+        Returns:
+            bytes: Base64 image byte string.
+        """
+        # Convert array into PIL image
+        bbox_PIL = PIL.Image.fromarray(bbox_array, 'RGBA')  # RGBA
+        iobuf = io.BytesIO()
+
+        # Format bbox into png for return
+        bbox_PIL.save(iobuf, format='png')
+
+        # Format return string
+        bbox_bytes = 'data:image/png;base64,{}'.format((str(b64encode(iobuf.getvalue()), 'utf-8')))
+
+        return bbox_bytes
+
+    @staticmethod
+    def video_stream() -> None:
+        """JavaScript to properly create live video stream using webcam as input.
+
+        """
+        with open("video_stream.js", 'r') as f:
+            js_code = ''.join(f.readlines())
+
+        js = Javascript(js_code)
+        display(js)
+
+    @staticmethod
+    def video_frame(label: str, bbox):
+        data = eval_js('stream_frame("{}", "{}")'.format(label, bbox))
+        return data
+
+    def predict_webcam(self):
+        # Start streaming video from webcam
+        self.video_stream()
+        label_html = 'Capturing...'
+
+        bbox = ''
+        with torch.no_grad():
+            set_logging(-1 if self.verbose else 1)
+            device = select_device(self.configs.device)
+            half = device.type != 'cpu'
+
+            model = attempt_load(self.configs.weights, map_location=device)
+            stride = int(model.stride.max())
+
+            imgsz = (480, 640)
+
+            if half:
+                model.half()
+
+            names = model.module.names if hasattr(model, 'module') else model.names
+            colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
+            if device.type != 'cpu':
+                model(torch.zeros(1, 3, imgsz[0], imgsz[1]).to(device).type_as(next(model.parameters())))
+
+            classes = None
+            if self.configs.classes:
+                classes = []
+                for class_name in self.configs.classes:
+                    classes.append(names.index(class_name))
+
+            if classes:
+                classes = [i for i in range(len(names)) if i not in classes]
+
+            while True:
+                js_reply = self.video_frame(label_html, bbox)
+                if not js_reply:
+                    break
+
+                img0 = self.js_to_image(js_reply["img"])
+                bbox_array = np.zeros([480, 640, 4], dtype=np.uint8)
+                img = letterbox(img0, imgsz, stride=stride)[0]
+                img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB
+                img = np.ascontiguousarray(img)
+                img = torch.from_numpy(img).to(device)
+                img = img.half() if half else img.float()
+                img /= 255.0  # Conver [0, 255] to [0.0, 1.0]
+                if img.ndimension() == 3:
+                    img = img.unsqueeze(0)
+
+                # Inference
+                t1 = time_synchronized()
+                pred = model(img, augment=False)[0]
+
+                # Apply NMS
+                pred = non_max_suppression(pred, self.configs.conf_thres, self.configs.iou_thres, classes=classes,
+                                           agnostic=False)
+                t2 = time_synchronized()
+
+                n_faces = 0
+                for i, det in enumerate(pred):
+                    s = ''
+                    s += '%gx%g ' % img.shape[2:]  # print string
+                    gn = torch.tensor(img0.shape)[[1, 0, 1, 0]]
+                    if len(det):
+                        det[:, :4] = scale_coords(img.shape[2:], det[:, :4], img0.shape).round()
+
+                        for c in det[:, -1].unique():
+                            n = (det[:, -1] == c).sum()  # detections per class
+                            s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+
+                        for *xyxy, conf, cls in reversed(det):
+                            if self.anonymizer:
+                                bbox_array[:, :, :3] = self.anonymizer.anonymize(img=img0, faces=[xyxy],
+                                                                                 only_faces=True)
+                            else:
+                                label = f'{names[int(cls)]} {conf:.2f}'
+                                plot_one_box(xyxy, bbox_array, label=label, color=colors[int(cls)], line_thickness=3)
+
+                        n_faces = (det[:, -1] == c).sum()
+
+                if self.display_num_faces:
+                    bbox_array = cv2.putText(bbox_array,
+                                             text=f"{n_faces or 'no'} face{'s' * (n_faces == 0 or n_faces > 1)}",
+                                             org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.3,
+                                             color=(255, 0, 0),
+                                             thickness=2, lineType=cv2.LINE_AA)
+
+                bbox_array[:, :, 3] = (bbox_array.max(axis=2) > 0).astype(int) * 255
+                bbox_bytes = self.bbox_to_bytes(bbox_array)
+
+                bbox = bbox_bytes
