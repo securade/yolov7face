@@ -69,23 +69,26 @@ class FaceAnonymizer:
             block_intensity=block_intensity if block_intensity else self.__params_default['block_intensity']
         )
 
-    def anonymize(self, img: np.ndarray, faces: List[list]) -> np.ndarray:
+    def anonymize(self, img: np.ndarray, faces: List[list], only_faces: bool = False) -> np.ndarray:
         """Performs face anonymization on the input image.
 
         Args:
             img (np.ndarray): Input image.
             faces (list[list]): Bounding boxes of each face in the image.
+            only_faces (bool): If True, only the pixels corresponding with anonymized face segments will be
+                               kept on the image while the remaining pixels are 0. Defaults to False.
 
         Returns:
             np.ndarray: Image after applying anonymization on faces.
         """
-        h, w, _ = img.shape
+        h, w = img.shape[0], img.shape[1]
 
         face_segments = []
         for bounding_box in faces:
             x1, y1, x2, y2 = self._convert_bbox_to_xyxy(bbox=bounding_box, img_w=w, img_h=h)
             face_segments.append({'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'face': img[y1:y2, x1:x2, :]})
 
+        new_img = np.zeros(img.shape) if only_faces else img.copy()
         for face_segment in face_segments:
             if self.method == 'blur':
                 face = cv2.GaussianBlur(
@@ -110,12 +113,13 @@ class FaceAnonymizer:
                 face[:, :] = self.block_intensity
 
             else:
-                raise ValueError(f"'{self.method}' is not a valid method; must be either 'blur', 'pixelate', or 'block'")
+                raise ValueError(
+                    f"'{self.method}' is not a valid method; must be either 'blur', 'pixelate', or 'block'")
 
             x1, y1, x2, y2 = face_segment['x1'], face_segment['y1'], face_segment['x2'], face_segment['y2']
-            img[y1:y2, x1:x2, :] = face
+            new_img[y1:y2, x1:x2, :] = face
 
-        return img
+        return new_img
 
     def _convert_bbox_to_xyxy(self, bbox: list, img_w: int, img_h: int) -> Tuple[int, int, int, int]:
         bbox = bbox if isinstance(bbox[0], (int, float)) else torch.tensor(bbox).int()
