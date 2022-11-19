@@ -1,21 +1,24 @@
+from base64 import b64encode, b64decode
+import io
 import os
-from typing import Union, Optional
+from typing import Union, Optional, List
 from typing_extensions import TypedDict
 import warnings
 
 import cv2
-from google.colab.patches import cv2_imshow
-from IPython.display import HTML, display, Javascript, Image
+from IPython.display import display, Javascript
 import numpy as np
 from numpy import random
-from PIL import Image
+import PIL
 import torch
+import yaml
 
-from anonymize import FaceAnonymizer
-from _utils import letterbox
+from .anonymize import FaceAnonymizer
+from ._colab import eval_js, cv2_imshow
+from .utils import letterbox
 
 from yolov7.models.experimental import attempt_load
-from yolov7.utils.general import check_img_size, non_max_suppression, scale_coords, xyxy2xywh, set_logging
+from yolov7.utils.general import check_img_size, non_max_suppression, scale_coords, set_logging
 from yolov7.utils.plots import plot_one_box
 from yolov7.utils.torch_utils import select_device, time_synchronized
 
@@ -157,7 +160,8 @@ class YOLOv7Face:
             configs (YOLOv7Configs): YOLOv7 model configurations.
             anonymizer (Optional[FaceAnonymizer]): An optional FaceAnonymizer if willing to apply face anonymizer.
                                                    Defaults to None.
-            display_num_faces (bool): Whether to display the number of detected faces in the image. Defaults to True.
+            display_num_faces (bool): Whether to display the number of detected faces on the output image.
+                                      Defaults to True.
             verbose (bool): Verbosity level. Defaults to False.
 
         Returns:
@@ -172,12 +176,12 @@ class YOLOv7Face:
             self.anonymizer.bbox_type = 'xyxy'
             warnings.warn("anonymizer.bbox_type must be 'xyxy'. It was automatically changed to 'xyxy'")
 
-    def predict_img(self, img: Union[str, Image.Image, np.ndarray], bboxes: Optional[List[list]] = None,
+    def predict_img(self, img: Union[str, PIL.Image.Image, np.ndarray], bboxes: Optional[List[list]] = None,
                     view_img: bool = True, save_to: Optional[str] = None):
         """Performs face detection (and anonymization if self.anonymizer is provided) on the input image.
 
         Args:
-            img (Union[str, Image.Image, np.ndarray]): Input image for face detection and/or anonymization.
+            img (Union[str, PIL.Image.Image, np.ndarray]): Input image for face detection and/or anonymization.
             bboxes (Optional[List[list]]): Optional bounding boxes to display on the image. Defaults to None.
             view_img (bool): Whether to display the output image. Defaults to True.
             save_to (Optional[str]): If provided, the output image will be saved to this path. Defaults to None.
@@ -187,7 +191,7 @@ class YOLOv7Face:
         """
         if isinstance(img, str):
             img0 = cv2.imread(img)
-        elif isinstance(img, Image.Image):
+        elif isinstance(img, PIL.Image.Image):
             img0 = np.array(img)
         else:
             img0 = img.copy()
@@ -268,7 +272,7 @@ class YOLOv7Face:
                     plot_one_box(bbox, img0, label="ground truth", line_thickness=2)
 
         if save_to:
-            Image.fromarray(img0).save(save_to)
+            PIL.Image.fromarray(img0).save(save_to)
 
         if view_img:
             cv2_imshow(img0)
@@ -288,7 +292,7 @@ class YOLOv7Face:
         fps = video.get(cv2.CAP_PROP_FPS)
         w = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        nframes = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+        n_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
 
         # Initializing object for writing video output
         output = cv2.VideoWriter(save_to, cv2.VideoWriter_fourcc(*'DIVX'), fps, (w, h))
@@ -319,7 +323,7 @@ class YOLOv7Face:
             if classes:
                 classes = [i for i in range(len(names)) if i not in classes]
 
-            for j in range(nframes):
+            for j in range(n_frames):
                 ret, img0 = video.read()
 
                 if ret:
@@ -363,12 +367,11 @@ class YOLOv7Face:
 
                     if self.display_num_faces:
                         img0 = cv2.putText(img0, text=f"{n_faces or 'no'} face{'s' * (n_faces == 0 or n_faces > 1)}",
-                                           org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.3,
-                                           color=(255, 0, 0),
-                                           thickness=2, lineType=cv2.LINE_AA)
+                                           org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.25,
+                                           color=(255, 0, 0), thickness=2, lineType=cv2.LINE_AA)
 
                     if self.verbose:
-                        print(f"{j + 1}/{nframes} frames processed")
+                        print(f"{j + 1}/{n_frames} frames processed")
 
                     output.write(img0)
                 else:
@@ -393,13 +396,13 @@ class YOLOv7Face:
         # Convert bytes to numpy array
         jpg_as_np = np.frombuffer(image_bytes, dtype=np.uint8)
 
-        # Cecode numpy array into OpenCV BGR image
+        # Decode numpy array into OpenCV BGR image
         img = cv2.imdecode(jpg_as_np, flags=1)
 
         return img
 
     @staticmethod
-    def bbox_to_bytes(bbox_array) -> bytes:
+    def bbox_to_bytes(bbox_array) -> str:
         """Converts OpenCV Rectangle bounding box image into base64 byte string to be overlayed on video stream.
 
         Args:
@@ -425,7 +428,7 @@ class YOLOv7Face:
         """JavaScript to properly create live video stream using webcam as input.
 
         """
-        with open("video_stream.js", 'r') as f:
+        with open("yoloface/video_stream.js", "r") as f:
             js_code = ''.join(f.readlines())
 
         js = Javascript(js_code)
@@ -481,7 +484,7 @@ class YOLOv7Face:
                 img = np.ascontiguousarray(img)
                 img = torch.from_numpy(img).to(device)
                 img = img.half() if half else img.float()
-                img /= 255.0  # Conver [0, 255] to [0.0, 1.0]
+                img /= 255.0  # Convert [0, 255] to [0.0, 1.0]
                 if img.ndimension() == 3:
                     img = img.unsqueeze(0)
 
