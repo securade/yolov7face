@@ -1,7 +1,7 @@
 from base64 import b64encode, b64decode
 import io
 import os
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Tuple
 from typing_extensions import TypedDict
 import warnings
 
@@ -179,18 +179,25 @@ class YOLOv7Face:
             self.anonymizer.bbox_type = 'xyxy'
             warnings.warn("anonymizer.bbox_type must be 'xyxy'. It was automatically changed to 'xyxy'")
 
-    def predict_img(self, img: Union[str, PIL.Image.Image, np.ndarray], bboxes: Optional[List[list]] = None,
-                    view_img: bool = True, save_to: Optional[str] = None):
+    def predict_img(self, img: Union[str, PIL.Image.Image, np.ndarray], custom_bbox: Optional[List[list]] = None,
+                    custom_bbox_label: Optional[str] = None, view_img: bool = True, save_to: Optional[str] = None,
+                    return_inf_time: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, float]]:
         """Performs face detection (and anonymization if self.anonymizer is provided) on the input image.
 
         Args:
             img (Union[str, PIL.Image.Image, np.ndarray]): Input image for face detection and/or anonymization.
-            bboxes (Optional[List[list]]): Optional bounding boxes to display on the image. Defaults to None.
+            custom_bbox (Optional[List[list]]): Custom, optional bounding boxes to display on the output image.
+                                                Defaults to None.
+            custom_bbox_label (Optional[str]): Optional label to show on custom bounding boxes. Defaults to None.
             view_img (bool): Whether to display the output image. Defaults to True.
             save_to (Optional[str]): If provided, the output image will be saved to this path. Defaults to None.
+            return_inf_time (bool): Whether to return the model inference time. Defaults to False.
 
         Returns:
-            np.ndarray: Output image after face detection and/or anonymization.
+            Union[np.ndarray, Tuple[np.ndarray, float]]: Output image after face detection and/or anonymization if
+                                                         return_inf_time=False; otherwise, a tuple containing:
+                                                            np.ndarray: Output image.
+                                                            float: Model inference time.
         """
         if isinstance(img, str):
             img0 = cv2.imread(img)
@@ -241,14 +248,12 @@ class YOLOv7Face:
 
             pred = non_max_suppression(pred, self.configs.conf_thres, self.configs.iou_thres, classes=classes,
                                        agnostic=False)
-
             t2 = time_synchronized()
 
             n_faces = 0
             for i, det in enumerate(pred):
                 s = ''
                 s += '%gx%g ' % img.shape[2:]  # Print string
-                gn = torch.tensor(img0.shape)[[1, 0, 1, 0]]
                 if len(det):
                     det[:, :4] = scale_coords(img.shape[2:], det[:, :4], img0.shape).round()
 
@@ -270,9 +275,9 @@ class YOLOv7Face:
                                    org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.3, color=(255, 0, 0),
                                    thickness=2, lineType=cv2.LINE_AA)
 
-            if bboxes:
-                for bbox in bboxes:
-                    plot_one_box(bbox, img0, label="ground truth", line_thickness=2)
+            if custom_bbox:
+                for bbox in custom_bbox:
+                    plot_one_box(bbox, img0, label=custom_bbox_label, line_thickness=2)
 
         if save_to:
             PIL.Image.fromarray(img0).save(save_to)
@@ -280,6 +285,8 @@ class YOLOv7Face:
         if view_img:
             cv2_imshow(img0)
 
+        if return_inf_time:
+            return img0, t2-t1
         return img0
 
     def predict_video(self, video_path: str, save_to: str):
@@ -415,14 +422,14 @@ class YOLOv7Face:
             bytes: Base64 image byte string.
         """
         # Convert array into PIL image
-        bbox_PIL = PIL.Image.fromarray(bbox_array, 'RGBA')  # RGBA
-        iobuf = io.BytesIO()
+        bbox_pil = PIL.Image.fromarray(bbox_array, 'RGBA')  # RGBA
+        io_buffer = io.BytesIO()
 
         # Format bbox into png for return
-        bbox_PIL.save(iobuf, format='png')
+        bbox_pil.save(io_buffer, format='png')
 
         # Format return string
-        bbox_bytes = 'data:image/png;base64,{}'.format((str(b64encode(iobuf.getvalue()), 'utf-8')))
+        bbox_bytes = 'data:image/png;base64,{}'.format((str(b64encode(io_buffer.getvalue()), 'utf-8')))
 
         return bbox_bytes
 

@@ -57,10 +57,10 @@ def _read_next_input_message():
 def _read_stdin_message():
     """Reads a stdin message.
 
-    This discards any colab messaging replies that may arrive on the stdin_socket.
+    This discards any colab messaging replies that may arrive at the stdin_socket.
 
     Returns:
-      The input message or None if input is not available.
+        The input message or None if input is not available.
     """
     while True:
         value = _read_next_input_message()
@@ -82,13 +82,12 @@ def read_reply_from_input(message_id, timeout_sec=None):
     received.
 
     Args:
-      message_id: the ID of the request for which this is blocking.
-      timeout_sec: blocks for that many seconds.
+        message_id: the ID of the request for which this is blocking.
+        timeout_sec: blocks for that many seconds.
 
     Returns:
-      If a reply of type `colab_reply` for `message_id` is returned before the
-      timeout, we return reply['data'] or None.
-      If a timeout is provided and no reply is received, we return None.
+        If a reply of type `colab_reply` for `message_id` is returned before timeout, we return reply['data'] or None.
+        If a timeout is provided and no reply is received, we return None.
 
     Raises:
       MessageError: if a reply is returned to us with an error.
@@ -107,10 +106,8 @@ def read_reply_from_input(message_id, timeout_sec=None):
             return reply.get('data', None)
 
 # Global counter for message id.
-# Note: this is not thread safe, if we want to make this
-# thread sfe we should replace this with thread safe counter
-# And add appropriate thread handling logic to read_reply_from_input
-
+# Note: this is not thread safe, if we want to make this thread safe, we should replace this with thread safe counter
+# and add appropriate thread handling logic to read_reply_from_input.
 
 _msg_id = 0
 
@@ -159,15 +156,15 @@ def blocking_request(request_type, request='', timeout_sec=5, parent=None):
     each other responses leaving another thread deadlocked.
 
     Args:
-      request_type: type of request being made
-      request: Jsonable object to send to front end as the request.
-      timeout_sec: max number of seconds to block, None, for no timeout.
-      parent: Parent message, for routing.
+        request_type: type of request being made
+        request: Jsonable object to send to front end as the request.
+        timeout_sec: max number of seconds to block, None, for no timeout.
+        parent: Parent message, for routing.
+
     Returns:
-      Reply by front end (Json'able object), or None if the timeout occurs.
+        Reply by front end (Json'able object), or None if the timeout occurs.
     """
-    # If we want this thread safe we can make read_reply_from_input to
-    # not discard messages with unknown msg ids as well as making msg_ids globally
-    # unique.
+    # If we want this thread safe, we can make read_reply_from_input to not discard messages with unknown msg ids
+    # as well as making msg_ids globally unique.
     request_id = send_request(request_type, request, parent=parent)
     return read_reply_from_input(request_id, timeout_sec)
