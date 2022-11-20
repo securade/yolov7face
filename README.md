@@ -3,6 +3,8 @@
 ![](https://img.shields.io/badge/version-v0.0.3-green)
 ![](https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9-blue)
 
+![alt text](logo.png "yolov7face logo")
+
 
 ## Introduction
 YOLOv7 Face is a Python library to perform face detection and anonymization using YOLOv7 models. If employed with
