@@ -26,20 +26,21 @@ from yolov7.utils.torch_utils import select_device, time_synchronized
 class YOLOv7Configs:
     class __params(TypedDict):
         weights: str
-        cfg: str
+        cfg: Optional[dict]
         img_size: int
         conf_thres: float
         iou_thres: float
         device: str
         classes: Optional[list]
 
-    def __init__(self, weights: str, cfg: str, img_size: int = 640, conf_thres: float = 0.25, iou_thres: float = 0.45,
-                 device: str = '0', classes: Optional[list] = None):
+    def __init__(self, weights: str, cfg: Optional[Union[str, dict]] = None, img_size: int = 640,
+                 conf_thres: float = 0.25, iou_thres: float = 0.45, device: str = '0', classes: Optional[list] = None):
         """Initializes an instance of the class to hold YOLOv7 model configurations.
 
         Args:
             weights (str): Path to the weights of the pre-trained model, i.e., 'model.pt' file.
-            cfg (str): Path to the YOLOv7 YAML config file used in training.
+            cfg (Optional[Union[str, dict]]): YOLOv7 configs used in training; path to the YAML file or the dictionary
+                                              containing the configs. Defaults to None.
             img_size (int): Inference image size (in pixels). Defaults to 640.
             conf_thres (float): Object confidence threshold for inference. Defaults to 0.25.
             iou_thres (float): IOU threshold for non-maximum suppression (NMS) for inference. Defaults to 0.45.
@@ -49,12 +50,14 @@ class YOLOv7Configs:
         Returns:
             self: The instance itself.
         """
-        with open(cfg, "r") as f:
-            cfg_dict = yaml.safe_load(f)
+        cfg_value = cfg
+        if cfg and isinstance(cfg, str):
+            with open(cfg, "r") as f:
+                cfg_value = yaml.safe_load(f)
 
         self.__params = dict(
             weights=weights,
-            cfg=cfg_dict,
+            cfg=cfg_value,
             img_size=img_size,
             conf_thres=conf_thres,
             iou_thres=iou_thres,
@@ -74,7 +77,7 @@ class YOLOv7Configs:
         self.__params['weights'] = value
 
     @property
-    def cfg(self) -> dict:
+    def cfg(self) -> Optional[dict]:
         """YOLOv7 configs used in training.
 
         """
@@ -82,12 +85,12 @@ class YOLOv7Configs:
 
     @cfg.setter
     def cfg(self, value: Union[dict, str]):
-        cfg_dict = value
+        cfg_value = value
         if isinstance(value, str):
             with open(value, "r") as f:
-                cfg_dict = yaml.safe_load(f)
+                cfg_value = yaml.safe_load(f)
 
-        self.__params['cfg'] = cfg_dict
+        self.__params['cfg'] = cfg_value
 
     @property
     def img_size(self) -> int:
