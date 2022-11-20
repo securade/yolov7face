@@ -155,16 +155,16 @@ class YOLOv7Configs:
 
 
 class YOLOv7Face:
-    def __init__(self, configs: YOLOv7Configs, anonymizer: Optional[FaceAnonymizer] = None,
-                 display_num_faces: bool = True, verbose: bool = False):
+    def __init__(self, configs: YOLOv7Configs, anonymizer: Optional[FaceAnonymizer] = None, display_n_faces: bool = True,
+                 verbose: bool = False):
         """Initializes an instance of the class to use YOLOv7 model for face detection and/or anonymization.
 
         Args:
             configs (YOLOv7Configs): YOLOv7 model configurations.
             anonymizer (Optional[FaceAnonymizer]): An optional FaceAnonymizer if willing to apply face anonymizer.
                                                    Defaults to None.
-            display_num_faces (bool): Whether to display the number of detected faces on the output image.
-                                      Defaults to True.
+            display_n_faces (bool): Whether to display the number of detected faces on the output image.
+                                    Defaults to True.
             verbose (bool): Verbosity level. Defaults to False.
 
         Returns:
@@ -172,12 +172,18 @@ class YOLOv7Face:
         """
         self.configs: YOLOv7Configs = configs
         self.anonymizer: Optional[FaceAnonymizer] = anonymizer
-        self.display_num_faces: bool = display_num_faces
+        self.display_n_faces: bool = display_n_faces
         self.verbose = verbose
 
         if self.anonymizer and self.anonymizer.bbox_type != 'xyxy':
             self.anonymizer.bbox_type = 'xyxy'
             warnings.warn("anonymizer.bbox_type must be 'xyxy'. It was automatically changed to 'xyxy'")
+
+    @staticmethod
+    def put_n_faces(img, n_faces: int):
+        return cv2.putText(img, text=f"{n_faces or 'no'} face{'s' * (n_faces == 0 or n_faces > 1)}",
+                           org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.3, color=(255, 0, 0),
+                           thickness=2, lineType=cv2.LINE_AA)
 
     def predict_img(self, img: Union[str, PIL.Image.Image, np.ndarray], custom_bbox: Optional[List[list]] = None,
                     custom_bbox_label: Optional[str] = None, view_img: bool = True, save_to: Optional[str] = None,
@@ -270,10 +276,8 @@ class YOLOv7Face:
 
                     n_faces = (det[:, -1] == c).sum()
 
-            if self.display_num_faces:
-                img0 = cv2.putText(img0, text=f"{n_faces or 'no'} face{'s' * (n_faces == 0 or n_faces > 1)}",
-                                   org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.3, color=(255, 0, 0),
-                                   thickness=2, lineType=cv2.LINE_AA)
+            if self.display_n_faces:
+                img0 = self.put_n_faces(img0, n_faces)
 
             if custom_bbox:
                 for bbox in custom_bbox:
@@ -358,7 +362,6 @@ class YOLOv7Face:
                     for i, det in enumerate(pred):
                         s = ''
                         s += '%gx%g ' % img.shape[2:]  # print string
-                        gn = torch.tensor(img0.shape)[[1, 0, 1, 0]]
                         if len(det):
                             det[:, :4] = scale_coords(img.shape[2:], det[:, :4], img0.shape).round()
 
@@ -375,13 +378,11 @@ class YOLOv7Face:
 
                             n_faces = (det[:, -1] == c).sum()
 
-                    if self.display_num_faces:
-                        img0 = cv2.putText(img0, text=f"{n_faces or 'no'} face{'s' * (n_faces == 0 or n_faces > 1)}",
-                                           org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.25,
-                                           color=(255, 0, 0), thickness=2, lineType=cv2.LINE_AA)
+                    if self.display_n_faces:
+                        img0 = self.put_n_faces(img0, n_faces)
 
                     if self.verbose:
-                        print(f"{j + 1}/{n_frames} frames processed")
+                        print(f"{j + 1}/{n_frames} frames processed (inference time={t2-t1:.4f}sec)")
 
                     output.write(img0)
                 else:
@@ -499,19 +500,16 @@ class YOLOv7Face:
                     img = img.unsqueeze(0)
 
                 # Inference
-                t1 = time_synchronized()
                 pred = model(img, augment=False)[0]
 
                 # Apply NMS
                 pred = non_max_suppression(pred, self.configs.conf_thres, self.configs.iou_thres, classes=classes,
                                            agnostic=False)
-                t2 = time_synchronized()
 
                 n_faces = 0
                 for i, det in enumerate(pred):
                     s = ''
                     s += '%gx%g ' % img.shape[2:]  # print string
-                    gn = torch.tensor(img0.shape)[[1, 0, 1, 0]]
                     if len(det):
                         det[:, :4] = scale_coords(img.shape[2:], det[:, :4], img0.shape).round()
 
@@ -529,12 +527,8 @@ class YOLOv7Face:
 
                         n_faces = (det[:, -1] == c).sum()
 
-                if self.display_num_faces:
-                    bbox_array = cv2.putText(bbox_array,
-                                             text=f"{n_faces or 'no'} face{'s' * (n_faces == 0 or n_faces > 1)}",
-                                             org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.3,
-                                             color=(255, 0, 0),
-                                             thickness=2, lineType=cv2.LINE_AA)
+                if self.display_n_faces:
+                    bbox_array = self.put_n_faces(bbox_array, n_faces)
 
                 bbox_array[:, :, 3] = (bbox_array.max(axis=2) > 0).astype(int) * 255
                 bbox_bytes = self.bbox_to_bytes(bbox_array)

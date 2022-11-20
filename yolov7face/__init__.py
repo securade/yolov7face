@@ -7,4 +7,4 @@ from .face import YOLOv7Configs, YOLOv7Face
 
 __all__ = ['FaceAnonymizer', 'YOLOv7Configs', 'YOLOv7Face']
 
-__version__ = '0.0.5'
+__version__ = '0.0.6'
