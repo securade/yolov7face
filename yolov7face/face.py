@@ -428,7 +428,7 @@ class YOLOv7Face:
         """JavaScript to properly create live video stream using webcam as input.
 
         """
-        with open("yoloface/video_stream.js", "r") as f:
+        with open("yolov7face/video_stream.js", "r") as f:
             js_code = ''.join(f.readlines())
 
         js = Javascript(js_code)

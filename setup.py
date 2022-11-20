@@ -4,16 +4,16 @@ from setuptools import setup
 
 
 setup(
-    name='yoloface',
+    name='yolov7face',
     version='0.0.3',
     description='Python library for face detection and anonymization based on YOLOv7 models.',
     keywords=['python', 'yolo', 'yolov7', 'face', 'face detection', 'anonymization', 'computer vision'],
     author='Mehdi Samsami',
     author_email='mehdisamsami@live.com',
-    url='https://github.com/msamsami/yoloface',
+    url='https://github.com/msamsami/yolov7face',
     long_description=codecs.open(path.join(path.abspath(path.dirname(__file__)), 'README.md'), encoding='utf-8').read(),
     long_description_content_type='text/markdown',
-    packages=['yoloface'],
+    packages=['yolov7face'],
     classifiers=[
         'Topic :: Computer Vision',
         'Programming Language :: Python :: 3.7',
