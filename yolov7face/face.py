@@ -15,6 +15,7 @@ import yaml
 
 from .anonymize import FaceAnonymizer
 from ._colab import eval_js, cv2_imshow
+from .model import YOLOv7Model
 from .utils import letterbox
 
 from yolov7.models.experimental import attempt_load
@@ -25,7 +26,7 @@ from yolov7.utils.torch_utils import select_device, time_synchronized
 
 class YOLOv7Configs:
     class __params(TypedDict):
-        weights: str
+        weights: Union[str, YOLOv7Model]
         cfg: Optional[dict]
         img_size: int
         conf_thres: float
@@ -33,12 +34,13 @@ class YOLOv7Configs:
         device: str
         classes: Optional[list]
 
-    def __init__(self, weights: str, cfg: Optional[Union[str, dict]] = None, img_size: int = 640,
+    def __init__(self, weights: Union[str, YOLOv7Model], cfg: Optional[Union[str, dict]] = None, img_size: int = 640,
                  conf_thres: float = 0.25, iou_thres: float = 0.45, device: str = '0', classes: Optional[list] = None):
         """Initializes an instance of the class to hold YOLOv7 model configurations.
 
         Args:
-            weights (str): Path to the weights of the pre-trained model, i.e., 'model.pt' file.
+            weights (Union[str, YOLOv7Model]): Path to the weights of the pre-trained model (i.e., *.pt file), or an
+                                               instance of YOLOv7Model class with valid filepath.
             cfg (Optional[Union[str, dict]]): YOLOv7 configs used in training; path to the YAML file or the dictionary
                                               containing the configs. Defaults to None.
             img_size (int): Inference image size (in pixels). Defaults to 640.
@@ -67,13 +69,14 @@ class YOLOv7Configs:
 
     @property
     def weights(self) -> str:
-        """Path to the weights of the pre-trained model (i.e., 'model.pt' file).
+        """Path to the weights of the pre-trained model (i.e., *.pt file).
 
         """
-        return self.__params.get('weights')
+        weights = self.__params.get('weights')
+        return weights if isinstance(weights, str) else weights.filepath
 
     @weights.setter
-    def weights(self, value: str):
+    def weights(self, value: Union[str, YOLOv7Model]):
         self.__params['weights'] = value
 
     @property
