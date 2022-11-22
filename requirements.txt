@@ -1,3 +1,4 @@
 -r yolov7/requirements.txt
 onnx>=1.9.0
 zmq
+moviepy==1.0.3

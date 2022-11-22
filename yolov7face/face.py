@@ -7,6 +7,7 @@ import warnings
 
 import cv2
 from IPython.display import display, Javascript
+from moviepy.editor import AudioFileClip, VideoClip
 import numpy as np
 from numpy import random
 import PIL
@@ -24,18 +25,24 @@ from yolov7.utils.plots import plot_one_box
 from yolov7.utils.torch_utils import select_device, time_synchronized
 
 
+__all__ = ['YOLOv7Configs', 'YOLOv7Face']
+
+
+class _YOLOv7ConfigsParams(TypedDict):
+    weights: Union[str, YOLOv7Model]
+    cfg: Optional[dict]
+    img_size: int
+    conf_thres: float
+    iou_thres: float
+    device: str
+    classes: Optional[list]
+
+
 class YOLOv7Configs:
-    class __params(TypedDict):
-        weights: Union[str, YOLOv7Model]
-        cfg: Optional[dict]
-        img_size: int
-        conf_thres: float
-        iou_thres: float
-        device: str
-        classes: Optional[list]
+    __params: _YOLOv7ConfigsParams = None
 
     def __init__(self, weights: Union[str, YOLOv7Model], cfg: Optional[Union[str, dict]] = None, img_size: int = 640,
-                 conf_thres: float = 0.25, iou_thres: float = 0.45, device: str = '0', classes: Optional[list] = None):
+                 conf_thres: float = 0.25, iou_thres: float = 0.45, device: str = 'cpu', classes: Optional[list] = None):
         """Initializes an instance of the class to hold YOLOv7 model configurations.
 
         Args:
@@ -46,7 +53,7 @@ class YOLOv7Configs:
             img_size (int): Inference image size (in pixels). Defaults to 640.
             conf_thres (float): Object confidence threshold for inference. Defaults to 0.25.
             iou_thres (float): IOU threshold for non-maximum suppression (NMS) for inference. Defaults to 0.45.
-            device (str): Device to run the model, e.g., '0', '1', '2', '3', or 'cpu'. Defaults '0'.
+            device (str): Device to run the model, e.g., '0', '1', '2', '3', or 'cpu'. Defaults 'cpu'.
             classes (Optional[list]): List of classes to filter. Defaults to None.
 
         Returns:
@@ -183,7 +190,7 @@ class YOLOv7Face:
             warnings.warn("anonymizer.bbox_type must be 'xyxy'. It was automatically changed to 'xyxy'")
 
     @staticmethod
-    def put_n_faces(img, n_faces: int):
+    def _put_n_faces(img, n_faces: int):
         return cv2.putText(img, text=f"{n_faces or 'no'} face{'s' * (n_faces == 0 or n_faces > 1)}",
                            org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.3, color=(255, 0, 0),
                            thickness=2, lineType=cv2.LINE_AA)
@@ -280,7 +287,7 @@ class YOLOv7Face:
                     n_faces = (det[:, -1] == c).sum()
 
             if self.display_n_faces:
-                img0 = self.put_n_faces(img0, n_faces)
+                img0 = self._put_n_faces(img0, n_faces)
 
             if custom_bbox:
                 for bbox in custom_bbox:
@@ -296,12 +303,13 @@ class YOLOv7Face:
             return img0, t2-t1
         return img0
 
-    def predict_video(self, video_path: str, save_to: str):
+    def predict_video(self, video_path: str, save_to: str, keep_audio: bool = True):
         """Performs face detection (and anonymization if self.anonymizer is provided) on the input video.
 
         Args:
             video_path (str): Path to the input video for face detection and/or anonymization.
             save_to (str): Path to save the output video.
+            keep_audio (str): Whether to keep audio on the input video file. Defaults to True.
         """
         video = cv2.VideoCapture(video_path)
 
@@ -312,7 +320,11 @@ class YOLOv7Face:
         n_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
 
         # Initializing object for writing video output
-        output = cv2.VideoWriter(save_to, cv2.VideoWriter_fourcc(*'DIVX'), fps, (w, h))
+        if not keep_audio:
+            output = cv2.VideoWriter(save_to, cv2.VideoWriter_fourcc(*'DIVX'), fps, (w, h))
+        else:
+            output = []
+
         torch.cuda.empty_cache()
 
         # Initializing model and setting it for inference
@@ -382,17 +394,39 @@ class YOLOv7Face:
                             n_faces = (det[:, -1] == c).sum()
 
                     if self.display_n_faces:
-                        img0 = self.put_n_faces(img0, n_faces)
+                        img0 = self._put_n_faces(img0, n_faces)
 
                     if self.verbose:
                         print(f"{j + 1}/{n_frames} frames processed (inference time={t2-t1:.4f}sec)")
 
-                    output.write(img0)
+                    if not keep_audio:
+                        output.write(img0)
+                    else:
+                        output.append(img0[:, :, ::-1])
                 else:
                     break
 
-        output.release()
+        if self.verbose:
+            print("Saving the output video...")
+
+        if not keep_audio:
+            output.release()
+        else:
+            def img_frame_at_t(t):
+                t_range = np.arange(0, n_frames/fps, 1/fps).tolist()
+                idx = t_range.index(t)
+                return output[idx]
+
+            audio_clip = AudioFileClip(video_path)
+            output_clip = VideoClip(make_frame=img_frame_at_t, duration=n_frames/fps)
+            output_clip = output_clip.set_audio(audio_clip)
+            output_clip.write_videofile(save_to, fps=fps, codec='libx264', preset='veryfast', logger=None)
+            del output, output_clip, audio_clip
+
         video.release()
+
+        if self.verbose:
+            print("Done!")
 
     @staticmethod
     def js_to_image(js_object) -> np.ndarray:
@@ -531,7 +565,7 @@ class YOLOv7Face:
                         n_faces = (det[:, -1] == c).sum()
 
                 if self.display_n_faces:
-                    bbox_array = self.put_n_faces(bbox_array, n_faces)
+                    bbox_array = self._put_n_faces(bbox_array, n_faces)
 
                 bbox_array[:, :, 3] = (bbox_array.max(axis=2) > 0).astype(int) * 255
                 bbox_bytes = self.bbox_to_bytes(bbox_array)

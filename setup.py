@@ -5,7 +5,7 @@ from setuptools import setup
 
 setup(
     name='yolov7face',
-    version='0.0.7',
+    version='0.0.8',
     description='Python library for face detection and anonymization based on YOLOv7 models.',
     keywords=['python', 'yolo', 'yolov7', 'face', 'face detection', 'anonymization', 'computer vision'],
     author='Mehdi Samsami',
@@ -25,7 +25,8 @@ setup(
     install_requires=[
         'matplotlib>=3.2.2', 'numpy>=1.18.5', 'opencv-python>=4.1.1', 'Pillow>=7.1.2', 'PyYAML>=5.3.1',
         'requests>=2.23.0', 'scipy>=1.4.1', 'torch>=1.7.0,!=1.12.0', 'torchvision>=0.8.1,!=0.13.0', 'tqdm>=4.41.0',
-        'protobuf<4.21.3', 'tensorboard>=2.4.1', 'pandas>=1.1.4', 'onnx>=1.9.0', 'ipython', 'psutil', 'thop'
+        'protobuf<4.21.3', 'tensorboard>=2.4.1', 'pandas>=1.1.4', 'onnx>=1.9.0', 'moviepy==1.0.3', 'ipython',
+        'psutil', 'thop', 'zmq'
     ],
     extras_require={}
 )

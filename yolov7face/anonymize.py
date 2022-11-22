@@ -7,8 +7,25 @@ from PIL import Image
 import torch
 
 
+__all__ = ['FaceAnonymizer']
+
+
+class _AnonymizerParams(TypedDict):
+    method: str
+    bbox_type: str
+    blur_kernel_size: Optional[Tuple[int, int]]
+    blur_sigma_x: Optional[float]
+    blur_sigma_y: Optional[float]
+    pixelate_type: Optional[str]
+    pixelate_size: Optional[Tuple[int, int]]
+    pixelate_ratio: Optional[float]
+    block_intensity: Optional[int]
+
+
 class FaceAnonymizer:
-    __params_default = dict(
+    __params_default: _AnonymizerParams = dict(
+        method='blur',
+        bbox_type='xyxy',
         blur_kernel_size=(11, 11),
         blur_sigma_x=10,
         blur_sigma_y=10,
@@ -17,17 +34,7 @@ class FaceAnonymizer:
         pixelate_ratio=10,
         block_intensity=0
     )
-
-    class __params(TypedDict):
-        method: str
-        bbox_type: str
-        blur_kernel_size: Optional[Tuple[int, int]]
-        blur_sigma_x: Optional[float]
-        blur_sigma_y: Optional[float]
-        pixelate_type: Optional[str]
-        pixelate_size: Optional[Tuple[int, int]]
-        pixelate_ratio: Optional[float]
-        block_intensity: Optional[int]
+    __params: _AnonymizerParams = None
 
     def __init__(self, method: str = 'blur', bbox_type: str = 'xyxy', blur_kernel_size: Optional[Tuple[int, int]] = None,
                  blur_sigma_x: Optional[float] = None, blur_sigma_y: Optional[float] = None,
