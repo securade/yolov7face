@@ -9,6 +9,7 @@ class YOLOv7Model:
     """This class represents a YOLOv7 model.
 
     """
+    _issue_warning = True
 
     def __init__(self, name: str, filepath: str, url: Optional[str] = None, version: Optional[str] = None,
                  author: Optional[str] = None):
@@ -41,7 +42,9 @@ class YOLOv7Model:
             open(self._filepath, 'wb').write(resp.content)
             print(f"Model weights downloaded and saved to filepath")
         elif os.path.isfile(self._filepath) and self._url is not None:
-            warnings.warn("Model already exists in filepath; url will be ignored")
+            if self._issue_warning:
+                warnings.warn("Model already exists in filepath; url will be ignored")
+                self._issue_warning = False
         else:
             pass
 
