@@ -195,6 +195,50 @@ class YOLOv7Face:
                            org=(20, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.3, color=(255, 0, 0),
                            thickness=2, lineType=cv2.LINE_AA)
 
+    def _initialize_assets(self, gpu_initialization: bool = True):
+        set_logging(-1 if self.verbose else 1)
+        device = select_device(self.configs.device)
+        half = device.type != 'cpu'
+        model = attempt_load(self.configs.weights, map_location=device)  # Load FP32 model
+        if half:
+            model.half()
+
+        names = model.module.names if hasattr(model, 'module') else model.names
+        colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
+
+        stride = int(model.stride.max())  # Model stride
+        img_size = check_img_size(self.configs.img_size, s=stride)  # Check img_size
+
+        if gpu_initialization and device.type != 'cpu':
+            model(torch.zeros(1, 3, img_size, img_size).to(device).type_as(next(model.parameters())))
+
+        return model, device, img_size, stride, names, colors, half
+
+    @staticmethod
+    def _prepare_img(img0, img_size, stride, device, half):
+        img = letterbox(img0, img_size, stride=stride)[0]
+        img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+        img = np.ascontiguousarray(img)
+        img = torch.from_numpy(img).to(device)
+        img = img.half() if half else img.float()  # uint8 to fp16/32
+        img /= 255.0  # Convert [0, 255] to [0.0, 1.0]
+        if img.ndimension() == 3:
+            img = img.unsqueeze(0)
+
+        return img
+
+    def _selected_classes(self, names):
+        classes = None
+        if self.configs.classes:
+            classes = []
+            for class_name in self.configs.classes:
+                classes.append(names.index(class_name))
+
+        if classes:
+            classes = [i for i in range(len(names)) if i not in classes]
+
+        return classes
+
     def predict_img(self, img: Union[str, PIL.Image.Image, np.ndarray], custom_bbox: Optional[List[list]] = None,
                     custom_bbox_label: Optional[str] = None, view_img: bool = True, save_to: Optional[str] = None,
                     return_inf_time: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, float]]:
@@ -223,45 +267,21 @@ class YOLOv7Face:
             img0 = img.copy()
 
         with torch.no_grad():
-            set_logging(-1 if self.verbose else 1)
-            device = select_device(self.configs.device)
-            half = device.type != 'cpu'
-            model = attempt_load(self.configs.weights, map_location=device)  # Load FP32 model
-            if half:
-                model.half()
 
-            names = model.module.names if hasattr(model, 'module') else model.names
-            colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
+            # Initialize model and required assets
+            model, device, img_size, stride, names, colors, half = self._initialize_assets()
 
-            stride = int(model.stride.max())  # Model stride
-            imgsz = check_img_size(self.configs.img_size, s=stride)  # Check img_size
-
-            if device.type != 'cpu':
-                model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))
-
-            img = letterbox(img0, imgsz, stride=stride)[0]
-            img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
-            img = np.ascontiguousarray(img)
-            img = torch.from_numpy(img).to(device)
-            img = img.half() if half else img.float()  # uint8 to fp16/32
-            img /= 255.0  # Convert [0, 255] to [0.0, 1.0]
-            if img.ndimension() == 3:
-                img = img.unsqueeze(0)
+            # Prepare image for inference
+            img = self._prepare_img(img0, img_size, stride, device, half)
 
             # Inference
             t1 = time_synchronized()
             pred = model(img, augment=False)[0]
 
+            # Filter out undesired classes
+            classes = self._selected_classes(names)
+
             # Apply NMS
-            classes = None
-            if self.configs.classes:
-                classes = []
-                for class_name in self.configs.classes:
-                    classes.append(names.index(class_name))
-
-            if classes:
-                classes = [i for i in range(len(names)) if i not in classes]
-
             pred = non_max_suppression(pred, self.configs.conf_thres, self.configs.iou_thres, classes=classes,
                                        agnostic=False)
             t2 = time_synchronized()
@@ -327,48 +347,26 @@ class YOLOv7Face:
 
         torch.cuda.empty_cache()
 
-        # Initializing model and setting it for inference
         with torch.no_grad():
-            set_logging(-1 if self.verbose else 1)
-            device = select_device(self.configs.device)
-            half = device.type != 'cpu'
-            model = attempt_load(self.configs.weights, map_location=device)  # load FP32 model
-            stride = int(model.stride.max())  # model stride
-            imgsz = check_img_size(self.configs.img_size, s=stride)  # check img_size
-            if half:
-                model.half()
 
-            names = model.module.names if hasattr(model, 'module') else model.names
-            colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
-            if device.type != 'cpu':
-                model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))
+            # Initialize model and required assets
+            model, device, img_size, stride, names, colors, half = self._initialize_assets()
 
-            classes = None
-            if self.configs.classes:
-                classes = []
-                for class_name in self.configs.classes:
-                    classes.append(names.index(class_name))
-
-            if classes:
-                classes = [i for i in range(len(names)) if i not in classes]
+            # Filter out undesired classes
+            classes = self._selected_classes(names)
 
             for j in range(n_frames):
                 ret, img0 = video.read()
 
                 if ret:
-                    img = letterbox(img0, imgsz, stride=stride)[0]
-                    img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
-                    img = np.ascontiguousarray(img)
-                    img = torch.from_numpy(img).to(device)
-                    img = img.half() if half else img.float()  # uint8 to fp16/32
-                    img /= 255.0  # Convert [0, 255] to [0.0, 1.0]
-                    if img.ndimension() == 3:
-                        img = img.unsqueeze(0)
+                    # Prepare image for inference
+                    img = self._prepare_img(img0, img_size, stride, device, half)
 
                     # Inference
                     t1 = time_synchronized()
                     pred = model(img, augment=False)[0]
 
+                    # Apply NMS
                     pred = non_max_suppression(pred, self.configs.conf_thres, self.configs.iou_thres, classes=classes,
                                                agnostic=False)
                     t2 = time_synchronized()
@@ -494,31 +492,18 @@ class YOLOv7Face:
 
         bbox = ''
         with torch.no_grad():
-            set_logging(-1 if self.verbose else 1)
-            device = select_device(self.configs.device)
-            half = device.type != 'cpu'
 
-            model = attempt_load(self.configs.weights, map_location=device)
-            stride = int(model.stride.max())
+            # Initialize model and required assets
+            model, device, _, stride, names, colors, half = self._initialize_assets(False)
 
-            imgsz = (480, 640)
+            # Set streaming image size
+            img_size = (480, 640)
 
-            if half:
-                model.half()
-
-            names = model.module.names if hasattr(model, 'module') else model.names
-            colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
             if device.type != 'cpu':
-                model(torch.zeros(1, 3, imgsz[0], imgsz[1]).to(device).type_as(next(model.parameters())))
+                model(torch.zeros(1, 3, img_size[0], img_size[1]).to(device).type_as(next(model.parameters())))
 
-            classes = None
-            if self.configs.classes:
-                classes = []
-                for class_name in self.configs.classes:
-                    classes.append(names.index(class_name))
-
-            if classes:
-                classes = [i for i in range(len(names)) if i not in classes]
+            # Filter out undesired classes
+            classes = self._selected_classes(names)
 
             while True:
                 js_reply = self.video_frame(label_html, bbox)
@@ -527,14 +512,9 @@ class YOLOv7Face:
 
                 img0 = self.js_to_image(js_reply["img"])
                 bbox_array = np.zeros([480, 640, 4], dtype=np.uint8)
-                img = letterbox(img0, imgsz, stride=stride)[0]
-                img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB
-                img = np.ascontiguousarray(img)
-                img = torch.from_numpy(img).to(device)
-                img = img.half() if half else img.float()
-                img /= 255.0  # Convert [0, 255] to [0.0, 1.0]
-                if img.ndimension() == 3:
-                    img = img.unsqueeze(0)
+
+                # Prepare image for inference
+                img = self._prepare_img(img0, img_size, stride, device, half)
 
                 # Inference
                 pred = model(img, augment=False)[0]
