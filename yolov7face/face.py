@@ -165,7 +165,7 @@ class YOLOv7Configs:
 
 
 class YOLOv7Face:
-    def __init__(self, configs: YOLOv7Configs, anonymizer: Optional[FaceAnonymizer] = None, display_n_faces: bool = True,
+    def __init__(self, configs: YOLOv7Configs, anonymizer: Optional[FaceAnonymizer] = None, display_n_faces: bool = False,
                  verbose: bool = False):
         """Initializes an instance of the class to use YOLOv7 model for face detection and/or anonymization.
 
@@ -174,7 +174,7 @@ class YOLOv7Face:
             anonymizer (Optional[FaceAnonymizer]): An optional FaceAnonymizer if willing to apply face anonymizer.
                                                    Defaults to None.
             display_n_faces (bool): Whether to display the number of detected faces on the output image.
-                                    Defaults to True.
+                                    Defaults to False.
             verbose (bool): Verbosity level. Defaults to False.
 
         Returns:
