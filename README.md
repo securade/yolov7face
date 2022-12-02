@@ -34,7 +34,7 @@ model_configs = YOLOv7Configs(
 ```
 
 If the *.pt file is available online rather than your local drive, or you want to keep your model information
-(e.g., name, version, URL, author, etc.) in a maintainable way, you may want to use `YOLOv7Model` class which
+(e.g., name, version, URL, author, etc.) in a maintainable way, you may want to use the `YOLOv7Model` class which
 is used to maintain YOLOv7 models. By passing a `filepath` and a `url` parameter to this class, if the model
 object is not found in the filepath, it will be automatically downloaded from the URL and saved to the filepath.
 After defining your model as a `YOLOv7Model` instance, you can pass it to the `weights` parameter of `YOLOv7Configs`:
@@ -53,8 +53,8 @@ my_model = YOLOv7Model(
 model_configs = YOLOv7Configs(weights=my_model, cfg='widerface.yaml')
 ```
 
-In case you don't have any pre-trained face detector model, you can use one of the provided pre-trained models
-in the library:
+In case you don't have your own pre-trained face detector model, you can use one of the pre-trained models
+that comes with the library:
 
 ```python
 from yolov7face import YOLOV7_WIDERFACE_MODEL, YOLOv7Configs
@@ -67,8 +67,8 @@ model_configs = YOLOv7Configs(weights=YOLOV7_WIDERFACE_MODEL, cfg='widerface.yam
 **NOTE**: If you don't want to apply any anonymization to detected faces, you can skip this step.
 
 
-In this step, you should define the face anonymizer configuration in case you want to anonymize the faces
-detected by the model. This can be done by creating an instance of `FaceAnonymizer` class. The face anonymizer
+In this step, you should define the face anonymizer configuration if you want to anonymize the faces detected
+by the model. This can be done by creating an instance of the `FaceAnonymizer` class. The face anonymizer
 currently supports three types of anonymization:
 - Blurring (`method='blur'`)
 - Pixelation (`method='pixelate'`)
@@ -85,7 +85,7 @@ anonymizer = FaceAnonymizer(method='blur', blur_kernel_size=(19, 19), blur_sigma
 ### Face detection
 
 Now that face detector configurations are defined, you can initialize your face detector by creating an instance
-of `YOLOv7Face` class and use it for inference:
+of the `YOLOv7Face` class and using it for inference:
 
 ```python
 from yolov7face import YOLOv7Face, YOLOv7Configs, YOLOV7_WIDERFACE_MODEL
