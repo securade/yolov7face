@@ -5,7 +5,7 @@ from setuptools import setup
 
 setup(
     name='yolov7face',
-    version='0.0.9',
+    version='0.0.10',
     description='Python library for face detection and anonymization based on YOLOv7 models.',
     keywords=['python', 'yolo', 'yolov7', 'face', 'face detection', 'anonymization', 'computer vision'],
     author='Mehdi Samsami',

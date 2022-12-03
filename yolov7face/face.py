@@ -165,7 +165,7 @@ class YOLOv7Configs:
 
 
 class YOLOv7Face:
-    def __init__(self, configs: YOLOv7Configs, anonymizer: Optional[FaceAnonymizer] = None, display_n_faces: bool = False,
+    def __init__(self, configs: YOLOv7Configs, anonymizer: Optional[FaceAnonymizer] = None, show_n_faces: bool = False,
                  verbose: bool = False):
         """Initializes an instance of the class to use YOLOv7 model for face detection and/or anonymization.
 
@@ -173,8 +173,7 @@ class YOLOv7Face:
             configs (YOLOv7Configs): YOLOv7 model configurations.
             anonymizer (Optional[FaceAnonymizer]): An optional FaceAnonymizer if willing to apply face anonymizer.
                                                    Defaults to None.
-            display_n_faces (bool): Whether to display the number of detected faces on the output image.
-                                    Defaults to False.
+            show_n_faces (bool): Whether to show the number of detected faces on the output image. Defaults to False.
             verbose (bool): Verbosity level. Defaults to False.
 
         Returns:
@@ -182,7 +181,7 @@ class YOLOv7Face:
         """
         self.configs: YOLOv7Configs = configs
         self.anonymizer: Optional[FaceAnonymizer] = anonymizer
-        self.display_n_faces: bool = display_n_faces
+        self.show_n_faces: bool = show_n_faces
         self.verbose = verbose
 
         if self.anonymizer and self.anonymizer.bbox_type != 'xyxy':
@@ -227,7 +226,7 @@ class YOLOv7Face:
 
         return img
 
-    def _selected_classes(self, names):
+    def _filter_classes(self, names):
         classes = None
         if self.configs.classes:
             classes = []
@@ -240,16 +239,16 @@ class YOLOv7Face:
         return classes
 
     def predict_img(self, img: Union[str, PIL.Image.Image, np.ndarray], custom_bbox: Optional[List[list]] = None,
-                    custom_bbox_label: Optional[str] = None, view_img: bool = True, save_to: Optional[str] = None,
+                    custom_bbox_label: Optional[str] = None, show_img: bool = False, save_to: Optional[str] = None,
                     return_inf_time: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, float]]:
-        """Performs face detection (and anonymization if self.anonymizer is provided) on the input image.
+        """Performs face detection and/or anonymization on an input image.
 
         Args:
             img (Union[str, PIL.Image.Image, np.ndarray]): Input image for face detection and/or anonymization.
             custom_bbox (Optional[List[list]]): Custom, optional bounding boxes to display on the output image.
                                                 Defaults to None.
-            custom_bbox_label (Optional[str]): Optional label to show on custom bounding boxes. Defaults to None.
-            view_img (bool): Whether to display the output image. Defaults to True.
+            custom_bbox_label (Optional[str]): An optional label to show on custom bounding boxes. Defaults to None.
+            show_img (bool): Whether to show the output image. Defaults to False.
             save_to (Optional[str]): If provided, the output image will be saved to this path. Defaults to None.
             return_inf_time (bool): Whether to return the model inference time. Defaults to False.
 
@@ -279,7 +278,7 @@ class YOLOv7Face:
             pred = model(img, augment=False)[0]
 
             # Filter out undesired classes
-            classes = self._selected_classes(names)
+            classes = self._filter_classes(names)
 
             # Apply NMS
             pred = non_max_suppression(pred, self.configs.conf_thres, self.configs.iou_thres, classes=classes,
@@ -288,25 +287,20 @@ class YOLOv7Face:
 
             n_faces = 0
             for i, det in enumerate(pred):
-                s = ''
-                s += '%gx%g ' % img.shape[2:]  # Print string
                 if len(det):
                     det[:, :4] = scale_coords(img.shape[2:], det[:, :4], img0.shape).round()
 
                     for c in det[:, -1].unique():
-                        n = (det[:, -1] == c).sum()  # Detections per class
-                        s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # Add to string
+                        n_faces = (det[:, -1] == c).sum()  # Number of faces in the image
 
                     for *xyxy, conf, cls in reversed(det):
                         if self.anonymizer:
                             img0 = self.anonymizer.anonymize(img=img0, faces=[xyxy])
                         else:
                             label = f'{names[int(cls)]} {conf:.2f}'
-                            plot_one_box(xyxy, img0, label=label, color=colors[int(cls)], line_thickness=3)
+                            plot_one_box(xyxy, img0, label=label, color=colors[int(cls)], line_thickness=2)
 
-                    n_faces = (det[:, -1] == c).sum()
-
-            if self.display_n_faces:
+            if self.show_n_faces:
                 img0 = self._put_n_faces(img0, n_faces)
 
             if custom_bbox:
@@ -314,24 +308,122 @@ class YOLOv7Face:
                     plot_one_box(bbox, img0, label=custom_bbox_label, line_thickness=2)
 
         if save_to:
-            PIL.Image.fromarray(img0).save(save_to)
+            PIL.Image.fromarray(img0[:, :, ::-1]).save(save_to)
 
-        if view_img:
+        if show_img:
             cv2_imshow(img0)
 
         if return_inf_time:
             return img0, t2-t1
         return img0
 
-    def predict_video(self, video_path: str, save_to: str, keep_audio: bool = True):
+    def predict_img_batch(self, img_list: List[str], return_img: bool = True, save_to: Optional[str] = None,
+                          return_inf_time: bool = False) \
+            -> Union[List[np.ndarray], List[float], Tuple[List[np.ndarray], List[float]]]:
+        """Performs face detection and/or anonymization on a batch of images.
+
+        Args:
+            img_list (List[str]): List of paths to the input image files.
+            return_img (bool): Whether to return the transformed images in function output. If set to False and save_to
+                               is given, function won't return the numpy arrays corresponding to transformed images, and
+                               they will be saved to the directory specified by save_to. Defaults to True.
+            save_to (Optional[str]): If provided, the output image will be saved to this directory. Note that this should
+                                     be a directory, not a file path. Defaults to None.
+            return_inf_time (bool): Whether to return the model inference time. Defaults to False.
+
+        Returns:
+            Union[List[np.ndarray], List[float], Tuple[List[np.ndarray], List[float]]]: The output can be in three forms
+                dependent of the given parameters. If return_img=True and return_inf_time=False, a list of numpy arrays
+                corresponding to images after face detection and/or anonymization is returned. If return_img=False and
+                return_inf_time=True, a list of float values corresponding to model inference times is returned.
+                If return_img=True and return_inf_time=True, a tuple containing the list of numpy arrays of transformed
+                images and the list of inference times is returned.
+        """
+        if not return_img and save_to is None:
+            raise ValueError(
+                "The function should either return the transformed images (return_img=True) or save them in "
+                "an output directory (save_to is given)"
+            )
+
+        if not isinstance(img_list, list):
+            raise ValueError("img_list must be a list containing file paths of input images")
+
+        n_images = len(img_list)
+        inf_times = []
+        output_list = []
+
+        with torch.no_grad():
+
+            # Initialize model and required assets
+            model, device, img_size, stride, names, colors, half = self._initialize_assets()
+
+            for k, img_filepath in enumerate(img_list, start=1):
+                img0 = cv2.imread(img_filepath)
+
+                # Prepare image for inference
+                img = self._prepare_img(img0, img_size, stride, device, half)
+
+                # Inference
+                t1 = time_synchronized()
+                pred = model(img, augment=False)[0]
+
+                # Filter out undesired classes
+                classes = self._filter_classes(names)
+
+                # Apply NMS
+                pred = non_max_suppression(pred, self.configs.conf_thres, self.configs.iou_thres, classes=classes,
+                                           agnostic=False)
+                t2 = time_synchronized()
+
+                if return_inf_time:
+                    inf_times.append(t2 - t1)
+
+                n_faces = 0
+                for i, det in enumerate(pred):
+                    if len(det):
+                        det[:, :4] = scale_coords(img.shape[2:], det[:, :4], img0.shape).round()
+
+                        for c in det[:, -1].unique():
+                            n_faces = (det[:, -1] == c).sum()  # Number of faces in the image
+
+                        for *xyxy, conf, cls in reversed(det):
+                            if self.anonymizer:
+                                img0 = self.anonymizer.anonymize(img=img0, faces=[xyxy])
+                            else:
+                                label = f'{names[int(cls)]} {conf:.2f}'
+                                plot_one_box(xyxy, img0, label=label, color=colors[int(cls)], line_thickness=2)
+
+                if self.show_n_faces:
+                    img0 = self._put_n_faces(img0, n_faces)
+
+                if save_to:
+                    output_filepath = os.path.join(save_to, os.path.basename(img_filepath))
+                    PIL.Image.fromarray(img0[:, :, ::-1]).save(output_filepath)
+
+                if return_img:
+                    output_list.append(img0)
+
+                if self.verbose:
+                    print(f"Image {k}/{n_images} processed")
+
+        func_output = ()
+        if return_img:
+            func_output += (output_list, )
+        if return_inf_time:
+            func_output += (inf_times, )
+
+        return func_output[0] if len(func_output) == 1 else func_output
+
+    def predict_video(self, video: str, save_to: str, keep_audio: bool = True):
         """Performs face detection (and anonymization if self.anonymizer is provided) on the input video.
 
         Args:
-            video_path (str): Path to the input video for face detection and/or anonymization.
+            video (str): Path to the input video for face detection and/or anonymization.
             save_to (str): Path to save the output video.
-            keep_audio (str): Whether to keep audio on the input video file. Defaults to True.
+            keep_audio (str): Whether to keep audio on the output video file. Defaults to True.
         """
-        video = cv2.VideoCapture(video_path)
+        video_filepath = video
+        video = cv2.VideoCapture(video)
 
         # Video information
         fps = video.get(cv2.CAP_PROP_FPS)
@@ -353,7 +445,7 @@ class YOLOv7Face:
             model, device, img_size, stride, names, colors, half = self._initialize_assets()
 
             # Filter out undesired classes
-            classes = self._selected_classes(names)
+            classes = self._filter_classes(names)
 
             for j in range(n_frames):
                 ret, img0 = video.read()
@@ -373,25 +465,20 @@ class YOLOv7Face:
 
                     n_faces = 0
                     for i, det in enumerate(pred):
-                        s = ''
-                        s += '%gx%g ' % img.shape[2:]  # print string
                         if len(det):
                             det[:, :4] = scale_coords(img.shape[2:], det[:, :4], img0.shape).round()
 
                             for c in det[:, -1].unique():
-                                n = (det[:, -1] == c).sum()  # detections per class
-                                s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                                n_faces = (det[:, -1] == c).sum()  # Number of faces in the image
 
                             for *xyxy, conf, cls in reversed(det):
                                 if self.anonymizer:
                                     img0 = self.anonymizer.anonymize(img=img0, faces=[xyxy])
                                 else:
                                     label = f'{names[int(cls)]} {conf:.2f}'
-                                    plot_one_box(xyxy, img0, label=label, color=colors[int(cls)], line_thickness=3)
+                                    plot_one_box(xyxy, img0, label=label, color=colors[int(cls)], line_thickness=2)
 
-                            n_faces = (det[:, -1] == c).sum()
-
-                    if self.display_n_faces:
+                    if self.show_n_faces:
                         img0 = self._put_n_faces(img0, n_faces)
 
                     if self.verbose:
@@ -415,7 +502,7 @@ class YOLOv7Face:
                 idx = t_range.index(t)
                 return output[idx]
 
-            audio_clip = AudioFileClip(video_path)
+            audio_clip = AudioFileClip(video_filepath)
             output_clip = VideoClip(make_frame=img_frame_at_t, duration=n_frames/fps)
             output_clip = output_clip.set_audio(audio_clip)
             output_clip.write_videofile(save_to, fps=fps, codec='libx264', preset='veryfast', logger=None)
@@ -449,7 +536,7 @@ class YOLOv7Face:
 
     @staticmethod
     def bbox_to_bytes(bbox_array) -> str:
-        """Converts OpenCV Rectangle bounding box image into base64 byte string to be overlayed on video stream.
+        """Converts OpenCV Rectangle bounding box image into base64 byte string to be overlaid on video stream.
 
         Args:
             bbox_array: Numpy array (pixels) containing rectangle to overlay on video stream.
@@ -503,7 +590,7 @@ class YOLOv7Face:
                 model(torch.zeros(1, 3, img_size[0], img_size[1]).to(device).type_as(next(model.parameters())))
 
             # Filter out undesired classes
-            classes = self._selected_classes(names)
+            classes = self._filter_classes(names)
 
             while True:
                 js_reply = self.video_frame(label_html, bbox)
@@ -525,14 +612,11 @@ class YOLOv7Face:
 
                 n_faces = 0
                 for i, det in enumerate(pred):
-                    s = ''
-                    s += '%gx%g ' % img.shape[2:]  # print string
                     if len(det):
                         det[:, :4] = scale_coords(img.shape[2:], det[:, :4], img0.shape).round()
 
                         for c in det[:, -1].unique():
-                            n = (det[:, -1] == c).sum()  # detections per class
-                            s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                            n_faces = (det[:, -1] == c).sum()  # Number of faces in the image
 
                         for *xyxy, conf, cls in reversed(det):
                             if self.anonymizer:
@@ -542,9 +626,7 @@ class YOLOv7Face:
                                 label = f'{names[int(cls)]} {conf:.2f}'
                                 plot_one_box(xyxy, bbox_array, label=label, color=colors[int(cls)], line_thickness=3)
 
-                        n_faces = (det[:, -1] == c).sum()
-
-                if self.display_n_faces:
+                if self.show_n_faces:
                     bbox_array = self._put_n_faces(bbox_array, n_faces)
 
                 bbox_array[:, :, 3] = (bbox_array.max(axis=2) > 0).astype(int) * 255
