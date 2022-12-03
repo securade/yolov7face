@@ -110,7 +110,7 @@ detector.predict_webcam()
 
 ### Face anonymization
 
-To anonymize detected faces, you should pass the face anonymizer instance to the `anonymizer` class of `YOLOv7Face`:
+To anonymize detected faces, you should pass the face anonymizer instance to the `anonymizer` parameter of `YOLOv7Face`:
 
 ```python
 from yolov7face import YOLOv7Face, YOLOv7Configs, YOLOV7_WIDERFACE_MODEL, FaceAnonymizer
