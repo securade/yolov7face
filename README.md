@@ -27,10 +27,7 @@ pre-trained YOLOv7 model, simply pass the path to its *.pt file:
 ```python
 from yolov7face import YOLOv7Configs
 
-model_configs = YOLOv7Configs(
-    weights='my_models/face_detector.pt',
-    cfg='widerface.yaml'
-)
+model_configs = YOLOv7Configs(weights='my_models/face_detector.pt', cfg='widerface.yaml')
 ```
 
 If the *.pt file is available online rather than your local drive, or you want to keep your model information
