@@ -22,8 +22,8 @@ import time
 
 import zmq
 
-from . import _ipython as ipython
-from ._errors import Error as ColabError
+from . import ipython
+from .errors import Error as ColabError
 
 _NOT_READY = object()
 

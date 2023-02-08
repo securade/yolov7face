@@ -16,34 +16,35 @@
 
 import json
 
-from . import _ipython
-from . import _message
+from . import ipython
+from . import message
 
 _json_decoder = json.JSONDecoder()
 
 
-def eval_js(script, ignore_result=False):
+def eval_js(script: str, ignore_result: bool = False):
     """Evaluates the Javascript within the context of the current cell.
 
     Args:
-        script: The javascript string to be evaluated
-        ignore_result: If true, will return immediately and result from javascript side will be ignored.
+        script (str): The javascript string to be evaluated.
+        ignore_result (bool): If true, will return immediately and result from javascript side will be ignored.
+                              Defaults to False.
 
     Returns:
         Result of the Javascript evaluation or None if ignore_result.
     """
     args = ['cell_javascript_eval', {'script': script}]
-    kernel = _ipython.get_kernel()
-    request_id = _message.send_request(*args, parent=kernel.shell.parent_header)
+    kernel = ipython.get_kernel()
+    request_id = message.send_request(*args, parent=kernel.shell.parent_header)
     if ignore_result:
         return
-    return _message.read_reply_from_input(request_id)
+    return message.read_reply_from_input(request_id)
 
 
 _functions = {}
 
 
-def register_callback(function_name, callback):
+def register_callback(function_name: str, callback):
     """Registers a function as a target invokable by JavaScript in outputs.
 
     This exposes the Python function as a target which may be invoked by
@@ -54,14 +55,13 @@ def register_callback(function_name, callback):
     then it will invoke callback(1, 2, 3, hi="bye")
 
     Args:
-        function_name: string
-        callback: function that possibly takes positional and keyword arguments
-        that will be passed via invokeFunction()
+        function_name (str): Name of the function.
+        callback: Function that possibly takes positional and keyword arguments to be passed via invokeFunction().
     """
     _functions[function_name] = callback
 
 
-def _invoke_function(function_name, json_args, json_kwargs):
+def _invoke_function(function_name: str, json_args: str, json_kwargs: str):
     """Invokes callback with given function_name.
 
     This function is meant to be used by frontend when proxying
@@ -73,9 +73,9 @@ def _invoke_function(function_name, json_args, json_kwargs):
     so this is a valid literal.
 
     Args:
-        function_name: string
-        json_args: string containing valid json, provided by user.
-        json_kwargs: string containing valid json, provided by user.
+        function_name (str): Name of the function.
+        json_args (str): String containing valid json, provided by user.
+        json_kwargs (str): String containing valid json, provided by user.
 
     Returns:
         The value returned by the callback.

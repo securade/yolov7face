@@ -1,6 +1,6 @@
 # YOLOv7 Face
 
-![](https://img.shields.io/badge/version-v0.0.10-green)
+![](https://img.shields.io/badge/version-v0.0.11-green)
 ![](https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9-blue)
 
 ![alt text](logo.png "yolov7face logo")
@@ -18,7 +18,7 @@ pip install git+https://github.com/msamsami/yolov7face
 ```
 
 ## Getting Started
-You can set your face detector and anonymizer up and running by following these steps:
+Take the following steps to set your face detector and anonymizer up and running:
 
 ### Define model configurations
 First, you need to define your face detector model configurations by initializing and instance of `YOLOv7Configs`
@@ -32,7 +32,7 @@ model_configs = YOLOv7Configs(weights='my_models/face_detector.pt', cfg='widerfa
 
 If the *.pt file is available online rather than your local drive, or you want to keep your model information
 (e.g., name, version, URL, author, etc.) in a maintainable way, you may want to use the `YOLOv7Model` class which
-is used to maintain YOLOv7 models. By passing a `filepath` and a `url` parameter to this class, if the model
+is used to maintain YOLOv7 models. When both `filepath` and `url` are passed to this class, if the model
 object is not found in the filepath, it will be automatically downloaded from the URL and saved to the filepath.
 After defining your model as a `YOLOv7Model` instance, you can pass it to the `weights` parameter of `YOLOv7Configs`:
 

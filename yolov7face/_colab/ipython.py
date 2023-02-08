@@ -22,10 +22,14 @@ import IPython
 
 
 def get_ipython():
+    """Returns IPython's InteractiveShell Instance.
+    """
     return IPython.get_ipython()
 
 
 def get_kernel():
+    """Returns IPython kernel.
+    """
     return get_ipython().kernel
 
 
@@ -34,6 +38,7 @@ def get_kernelapp():
 
 
 def in_ipython():
-    """Return True iff we're in a IPython like environment."""
+    """Returns True if we're in an IPython like environment.
+    """
     ip = IPython.get_ipython()
     return hasattr(ip, 'kernel')

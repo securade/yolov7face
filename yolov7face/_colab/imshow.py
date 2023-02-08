@@ -17,7 +17,7 @@ def cv2_imshow(a: np.ndarray):
                         color image, or shape (N, M, 4) for an NxM BGRA color image.
     """
     a = a.clip(0, 255).astype('uint8')
-    # cv2 stores colors as BGR; convert to RGB
+
     if a.ndim == 3:
         if a.shape[2] == 4:
             a = cv2.cvtColor(a, cv2.COLOR_BGRA2RGBA)

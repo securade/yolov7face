@@ -40,7 +40,7 @@ class YOLOv7Model:
             print("Downloading model weights from url...")
             resp = requests.get(self._url)
             open(self._filepath, 'wb').write(resp.content)
-            print(f"Model weights downloaded and saved to filepath")
+            print("Model weights downloaded and saved to filepath")
         elif os.path.isfile(self._filepath) and self._url is not None:
             if self._issue_warning:
                 warnings.warn("Model already exists in filepath; url will be ignored")
