@@ -15,7 +15,7 @@ import torch
 import yaml
 
 from .anonymize import FaceAnonymizer
-from ._colab import eval_js, cv2_imshow
+# from ._colab import eval_js, cv2_imshow
 from .model import YOLOv7Model
 from .utils import letterbox
 
